@@ -134,7 +134,7 @@ func New(opts *Options) (*Streamer, error) {
 	}
 
 	if opts.MaxRows == 0 {
-		opts.MaxRows = 5000
+		opts.MaxRows = 500
 	}
 
 	bq := &Streamer{
