@@ -16,6 +16,7 @@ import (
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/jwt"
 	"google.golang.org/api/bigquery/v2"
+	"github.com/segmentio/go-log"
 )
 
 // Row is a row that will be inserted into BigQuery.
@@ -78,6 +79,10 @@ type Options struct {
 
 	// Number of times to retry requests to Big Query. Defaults to 3.
 	Retries int
+
+	// Max rows per event type allowed in cache before insert request is triggered
+	MaxRows int
+
 }
 
 // BQ streams rows and insert them to Google's BigQuery.
@@ -126,6 +131,10 @@ func New(opts *Options) (*Streamer, error) {
 
 	if opts.CacheInterval == 0 {
 		opts.CacheInterval = time.Second
+	}
+
+	if opts.MaxRows == 0 {
+		opts.MaxRows = 5000
 	}
 
 	bq := &Streamer{
@@ -202,6 +211,8 @@ func (bq *Streamer) tick() {
 			keys := bq.cache.Keys()
 
 			wg.Add(len(keys))
+
+			log.Debug("Cached items: [%d]", len(keys))
 
 			for _, k := range keys {
 				go func(k string) {
@@ -346,5 +357,10 @@ func (bq *Streamer) dispatcher() {
 			JSON: r.Data(),
 		})
 		insert.Unlock()
+
+		if(len(insert.rows) > bq.MaxRows) {
+			log.Debug("Streaming %s due to exceeded max row amount", key)
+			go bq.insert(key, insert)
+		}
 	}
 }
